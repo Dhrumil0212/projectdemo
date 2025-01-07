@@ -2,11 +2,11 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   ScrollView,
   ActivityIndicator,
 } from "react-native";
-import { SliderBox } from "react-native-image-slider-box";
 import MapView, { Marker } from "react-native-maps";
 import { getPlaceByName } from "../services/placesService";
 import { imageMapping } from "../config/imageMapping";
@@ -16,11 +16,26 @@ import {
 } from "react-native-responsive-screen";
 
 const PlaceDetails = ({ route }) => {
-  const { placeName, stateName } = route.params;
+  const { placeName } = route.params;
+
+  const inferStateName = (place) => {
+    const stateMapping = {
+      "Hawa Mahal": "Rajasthan",
+      // Add other mappings as needed
+    };
+    return stateMapping[place] || "Unknown";
+  };
+
+  const stateName = route.params.stateName || inferStateName(placeName);
+
   const [place, setPlace] = useState(null);
   const [images, setImages] = useState([]);
 
   useEffect(() => {
+    console.log("Route parameters:", route.params);
+    console.log("Inferred stateName:", stateName);
+
+    // Fetch place data
     getPlaceByName(placeName)
       .then((placeData) => {
         setPlace(placeData);
@@ -30,9 +45,25 @@ const PlaceDetails = ({ route }) => {
   }, [placeName, stateName]);
 
   const loadImages = (state, place) => {
-    const stateImages = imageMapping[state];
-    const placeImages = stateImages ? stateImages[place] : [];
-    setImages(placeImages || []);
+    if (!state || !imageMapping[state]) {
+      console.warn(`State is undefined or not found: ${state}`);
+      return;
+    }
+
+    const placeImages = imageMapping[state]?.[place];
+    if (placeImages?.length > 0) {
+      // Handle image paths correctly by referencing them as URIs (for dynamic paths)
+      const decodedImages = placeImages.map((img) => {
+        // Decoding the URL to handle spaces or special characters
+        const decodedPath = decodeURI(img);
+        console.log(imageMapping[state]?.[place]);
+        // console.log(`../assets/${state}/${decodedPath}`);
+        return { uri: `../assets/${state}/${decodedPath}` }; // Dynamic URI path for images
+      });
+      setImages(decodedImages);
+    } else {
+      console.warn(`No images found for ${state}/${place}`);
+    }
   };
 
   if (!place) {
@@ -56,19 +87,16 @@ const PlaceDetails = ({ route }) => {
 
   return (
     <ScrollView style={styles.container}>
-      {images.length > 0 && (
-        <SliderBox
-          images={images}
-          sliderBoxHeight={hp(30)}
-          dotColor="#343a40"
-          inactiveDotColor="#ccc"
-          autoplay
-          circleLoop
-          resizeMode="cover"
-        />
-      )}
-
       <Text style={styles.heading}>{place.name}</Text>
+      <ScrollView horizontal style={styles.imageSlider}>
+        {images.length > 0 ? (
+          images.map((img, index) => (
+            <Image key={index} source={img} style={styles.image} />
+          ))
+        ) : (
+          <Text style={styles.noImageText}>No images available</Text>
+        )}
+      </ScrollView>
 
       <View style={styles.infoContainer}>
         <View style={styles.rowContainer}>
@@ -125,6 +153,20 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginVertical: hp(2),
     color: "#343a40",
+  },
+  imageSlider: {
+    marginBottom: hp(2),
+  },
+  image: {
+    width: wp(70),
+    height: hp(25),
+    borderRadius: wp(3),
+    marginRight: wp(2),
+  },
+  noImageText: {
+    fontSize: wp(4),
+    color: "#6c757d",
+    textAlign: "center",
   },
   infoContainer: {
     backgroundColor: "#fff",
